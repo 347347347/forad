@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   getManualPage,
-  getEvalPage,
   getAxesFromPage,
   getEquipmentFromPage,
   getNotionUrl,
 } from '@/lib/notion'
-import { getProducts, getQuantInputs, getFuncInputs } from '@/lib/sheets'
+import {
+  getSpreadsheetIdByTitle,
+  getSheetUrl,
+  getProducts,
+  getQuantInputs,
+  getFuncInputs,
+} from '@/lib/sheets'
 
 export async function GET(req: NextRequest) {
   const title = req.nextUrl.searchParams.get('title')
@@ -15,33 +20,33 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Notion・Sheets を並列取得
-    const [manualPage, evalPage, quantInputs, funcInputs] = await Promise.all([
-      getManualPage(title),
-      getEvalPage(title),
-      getQuantInputs(),
-      getFuncInputs(),
+    // Notion手順書ページとSheetsのスプレッドシートIDを並列取得
+    const [manualPage, spreadsheetId] = await Promise.all([
+      getManualPage(title).catch(() => null),
+      getSpreadsheetIdByTitle(title),
     ])
 
-    if (!manualPage) {
+    if (!manualPage && !spreadsheetId) {
       return NextResponse.json(
-        { error: `「${title}」の手順書が見つかりませんでした` },
+        { error: `「${title}」に一致するデータが見つかりませんでした` },
         { status: 404 }
       )
     }
 
-    // 手順書ページ内の検証軸DBと備品リストを並列取得
-    const [axes, equipment, products] = await Promise.all([
-      getAxesFromPage(manualPage.id),
-      getEquipmentFromPage(manualPage.id),
-      getProducts(title),
+    // 並列でデータ取得
+    const [axes, equipment, products, quantInputs, funcInputs] = await Promise.all([
+      manualPage ? getAxesFromPage(manualPage.id).catch(() => []) : Promise.resolve([]),
+      manualPage ? getEquipmentFromPage(manualPage.id).catch(() => []) : Promise.resolve([]),
+      spreadsheetId ? getProducts(spreadsheetId).catch(() => []) : Promise.resolve([]),
+      spreadsheetId ? getQuantInputs(spreadsheetId).catch(() => []) : Promise.resolve([]),
+      spreadsheetId ? getFuncInputs(spreadsheetId).catch(() => []) : Promise.resolve([]),
     ])
 
     return NextResponse.json({
       title,
       links: {
-        eval: evalPage ? getNotionUrl(evalPage.id) : null,
-        manual: getNotionUrl(manualPage.id),
+        eval: spreadsheetId ? getSheetUrl(spreadsheetId) : null,
+        manual: manualPage ? getNotionUrl(manualPage.id) : null,
       },
       axes,
       equipment,
