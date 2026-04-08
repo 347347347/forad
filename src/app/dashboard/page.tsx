@@ -21,7 +21,10 @@ export default function DashboardPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'エラーが発生しました')
       setData(json)
-      setAxes(json.axes)
+      setAxes(json.axes ?? [])
+      if (json.errors?.length > 0) {
+        console.warn('部分エラー:', json.errors)
+      }
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -93,7 +96,14 @@ export default function DashboardPage() {
         {/* Error */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700 text-sm">
-            {error}
+            <div className="font-medium mb-1">{error}</div>
+            <div className="text-xs text-red-500">Railwayのログで詳細を確認してください</div>
+          </div>
+        )}
+        {data?.errors?.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs mb-4">
+            <div className="font-medium mb-1">一部データの取得に失敗しました</div>
+            {data.errors.map((e: string, i: number) => <div key={i}>・{e}</div>)}
           </div>
         )}
 

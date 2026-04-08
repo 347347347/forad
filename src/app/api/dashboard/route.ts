@@ -19,46 +19,63 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 })
   }
 
-  try {
-    // Notion手順書ページとSheetsのスプレッドシートIDを並列取得
-    const [manualPage, spreadsheetId] = await Promise.all([
-      getManualPage(title).catch(() => null),
-      getSpreadsheetIdByTitle(title),
-    ])
-
-    if (!manualPage && !spreadsheetId) {
-      return NextResponse.json(
-        { error: `「${title}」に一致するデータが見つかりませんでした` },
-        { status: 404 }
-      )
-    }
-
-    // 並列でデータ取得
-    const [axes, equipment, products, quantInputs, funcInputs] = await Promise.all([
-      manualPage ? getAxesFromPage(manualPage.id).catch(() => []) : Promise.resolve([]),
-      manualPage ? getEquipmentFromPage(manualPage.id).catch(() => []) : Promise.resolve([]),
-      spreadsheetId ? getProducts(spreadsheetId).catch(() => []) : Promise.resolve([]),
-      spreadsheetId ? getQuantInputs(spreadsheetId).catch(() => []) : Promise.resolve([]),
-      spreadsheetId ? getFuncInputs(spreadsheetId).catch(() => []) : Promise.resolve([]),
-    ])
-
-    return NextResponse.json({
-      title,
-      links: {
-        eval: spreadsheetId ? getSheetUrl(spreadsheetId) : null,
-        manual: manualPage ? getNotionUrl(manualPage.id) : null,
-      },
-      axes,
-      equipment,
-      products,
-      quantInputs,
-      funcInputs,
-    })
-  } catch (err: any) {
-    console.error('[dashboard/route]', err)
-    return NextResponse.json(
-      { error: 'データ取得中にエラーが発生しました', detail: err.message },
-      { status: 500 }
-    )
+  const result: any = {
+    title,
+    links: { eval: null, manual: null },
+    axes: [],
+    equipment: [],
+    products: [],
+    quantInputs: [],
+    funcInputs: [],
+    errors: [],
   }
+
+  // Sheets: マスターシートからスプレッドシートIDを取得
+  try {
+    const spreadsheetId = await getSpreadsheetIdByTitle(title)
+    if (spreadsheetId) {
+      result.links.eval = getSheetUrl(spreadsheetId)
+
+      const [products, quantInputs, funcInputs] = await Promise.all([
+        getProducts(spreadsheetId).catch((e) => { result.errors.push(`商品リスト取得エラー: ${e.message}`); return [] }),
+        getQuantInputs(spreadsheetId).catch((e) => { result.errors.push(`定量項目取得エラー: ${e.message}`); return [] }),
+        getFuncInputs(spreadsheetId).catch((e) => { result.errors.push(`機能項目取得エラー: ${e.message}`); return [] }),
+      ])
+
+      result.products = products
+      result.quantInputs = quantInputs
+      result.funcInputs = funcInputs
+    } else {
+      result.errors.push(`マスターシートに「${title}」が見つかりません`)
+    }
+  } catch (e: any) {
+    result.errors.push(`Sheets接続エラー: ${e.message}`)
+  }
+
+  // Notion: エラーでも他のデータは返す
+  try {
+    const manualPage = await getManualPage(title)
+    if (manualPage) {
+      result.links.manual = getNotionUrl(manualPage.id)
+
+      const [axes, equipment] = await Promise.all([
+        getAxesFromPage(manualPage.id).catch((e) => { result.errors.push(`検証軸取得エラー: ${e.message}`); return [] }),
+        getEquipmentFromPage(manualPage.id).catch((e) => { result.errors.push(`備品取得エラー: ${e.message}`); return [] }),
+      ])
+
+      result.axes = axes
+      result.equipment = equipment
+    } else {
+      result.errors.push(`Notionに「${title}」の手順書が見つかりません`)
+    }
+  } catch (e: any) {
+    result.errors.push(`Notion接続エラー: ${e.message}`)
+  }
+
+  // Sheetsデータが1件も取れなかった場合のみ404
+  if (result.products.length === 0 && result.errors.some((e: string) => e.includes('マスターシート'))) {
+    return NextResponse.json({ error: `「${title}」に一致するデータが見つかりませんでした` }, { status: 404 })
+  }
+
+  return NextResponse.json(result)
 }
