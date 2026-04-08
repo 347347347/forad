@@ -1,142 +1,170 @@
 import { VerificationAxis, Equipment } from '@/types'
 
-const NOTION_TOKEN = () => {
+function getToken() {
   if (!process.env.NOTION_TOKEN_V2) throw new Error('NOTION_TOKEN_V2 is not set')
   return process.env.NOTION_TOKEN_V2
 }
 
-const MANUAL_DB_ID = () => {
+function getManualDbId() {
   if (!process.env.NOTION_MANUAL_DB_ID) throw new Error('NOTION_MANUAL_DB_ID is not set')
-  return process.env.NOTION_MANUAL_DB_ID
+  // ハイフンなしの32文字に正規化
+  return process.env.NOTION_MANUAL_DB_ID.replace(/-/g, '')
 }
 
-// token_v2を使ってNotionのAPIを直接叩く
-async function notionFetch(endpoint: string, body: object) {
+// token_v2でNotionの非公式APIを叩く
+async function notionPost(endpoint: string, body: object) {
   const res = await fetch(`https://www.notion.so/api/v3/${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Cookie': `token_v2=${NOTION_TOKEN()}`,
-      'x-notion-active-user-header': '',
+      'Cookie': `token_v2=${getToken()}`,
+      'notion-audit-log-heartbeat': 'false',
     },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`Notion API error: ${res.status} ${await res.text()}`)
-  return res.json()
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Notion API error: ${res.status} ${text}`)
+  return JSON.parse(text)
 }
 
-// DBをタイトル名でフィルタリングしてページを取得
-export async function getManualPage(title: string): Promise<{ id: string } | null> {
-  const dbId = MANUAL_DB_ID().replace(/-/g, '')
-
-  const data = await notionFetch('queryCollection', {
-    collectionId: dbId,
-    collectionViewId: '',
-    query: {
-      filter: {
-        operator: 'and',
-        filters: [{
-          property: 'タイトル名',
-          filter: { operator: 'string_is', value: { type: 'exact', value: title } },
-        }],
-      },
-    },
-    loader: { type: 'reducer', reducers: { collection_group_results: { type: 'results', limit: 1 } } },
-  })
-
-  const blocks = data?.recordMap?.block ?? {}
-  const pageIds = Object.keys(blocks).filter(id => blocks[id]?.value?.parent_id === dbId)
-  if (pageIds.length === 0) return null
-  return { id: pageIds[0] }
-}
-
-// ページ内のブロックを取得
-async function getPageBlocks(pageId: string) {
-  const data = await notionFetch('loadPageChunk', {
-    pageId: pageId.replace(/-/g, ''),
+// ページのブロックを取得
+async function loadPageChunk(pageId: string) {
+  const data = await notionPost('loadPageChunk', {
+    pageId,
     limit: 100,
     cursor: { stack: [] },
     chunkNumber: 0,
     verticalColumns: false,
   })
-  return data?.recordMap?.block ?? {}
+  return data?.recordMap ?? {}
 }
 
-// 検証軸DB（子データベース）から検証軸一覧を取得
+// DBをタイトル名で検索してページIDを返す
+export async function getManualPage(title: string): Promise<{ id: string } | null> {
+  const dbId = getManualDbId()
+
+  // まずDBページ自体を読み込んでcollection_idを取得
+  const rm = await loadPageChunk(dbId)
+  const blocks = rm.block ?? {}
+  const dbBlock = blocks[dbId]?.value
+
+  if (!dbBlock) return null
+
+  const collectionId = dbBlock.collection_id
+  const viewIds = dbBlock.view_ids ?? []
+  if (!collectionId || viewIds.length === 0) return null
+
+  // コレクションをクエリ
+  const data = await notionPost('queryCollection', {
+    collectionId,
+    collectionViewId: viewIds[0],
+    query2: {
+      filter: {
+        operator: 'and',
+        filters: [{
+          property: 'タイトル名',
+          filter: {
+            operator: 'string_is',
+            value: { type: 'exact', value: title },
+          },
+        }],
+      },
+    },
+    loader: {
+      type: 'table',
+      limit: 10,
+      searchQuery: '',
+      userTimeZone: 'Asia/Tokyo',
+    },
+  })
+
+  const resultBlockIds: string[] = data?.result?.blockIds ?? []
+  if (resultBlockIds.length === 0) return null
+
+  return { id: resultBlockIds[0] }
+}
+
+// 手順書ページ内の検証軸DB（child_database）から検証軸を取得
 export async function getAxesFromPage(pageId: string): Promise<VerificationAxis[]> {
-  const blocks = await getPageBlocks(pageId)
+  const rm = await loadPageChunk(pageId)
+  const blocks = rm.block ?? {}
+  const pageBlock = blocks[pageId]?.value
+  if (!pageBlock) return []
+
+  const contentIds: string[] = pageBlock.content ?? []
   const axes: VerificationAxis[] = []
 
-  for (const [id, block] of Object.entries(blocks) as any[]) {
-    const value = block?.value
-    if (!value) continue
-    // child_databaseブロックを探す
-    if (value.type === 'collection_view' && value.parent_id === pageId.replace(/-/g, '')) {
-      const collectionId = value.collection_id
-      if (!collectionId) continue
+  for (const bid of contentIds) {
+    const block = blocks[bid]?.value
+    if (!block) continue
+    if (block.type !== 'collection_view' && block.type !== 'collection_view_page') continue
 
-      const dbData = await notionFetch('queryCollection', {
-        collectionId,
-        collectionViewId: value.view_ids?.[0] ?? '',
-        query: {},
-        loader: { type: 'reducer', reducers: { collection_group_results: { type: 'results', limit: 50 } } },
-      })
+    const collectionId = block.collection_id
+    if (!collectionId) continue
+    const viewIds = block.view_ids ?? []
 
-      const dbBlocks = dbData?.recordMap?.block ?? {}
-      const collection = dbData?.recordMap?.collection?.[collectionId]?.value
+    const data = await notionPost('queryCollection', {
+      collectionId,
+      collectionViewId: viewIds[0] ?? '',
+      query2: {},
+      loader: { type: 'table', limit: 100, userTimeZone: 'Asia/Tokyo' },
+    })
 
-      for (const [bid, bblock] of Object.entries(dbBlocks) as any[]) {
-        const bval = bblock?.value
-        if (!bval || bval.parent_id !== collectionId) continue
-        if (bval.type !== 'page') continue
+    const resultBlockIds: string[] = data?.result?.blockIds ?? []
+    const rmBlocks = data?.recordMap?.block ?? {}
+    const collection = data?.recordMap?.collection?.[collectionId]?.value
+    const schema = collection?.schema ?? {}
 
-        const titleArr = bval.properties?.title ?? []
-        const label = titleArr.map((t: any) => t[0]).join('') || '（未設定）'
-
-        // 内容プロパティを取得（スキーマから内容のキーを探す）
-        let detail = ''
-        const schema = collection?.schema ?? {}
-        for (const [key, sch] of Object.entries(schema) as any[]) {
-          if (sch.name === '内容' || sch.name === '詳細' || sch.name === 'description') {
-            const prop = bval.properties?.[key] ?? []
-            detail = prop.map((t: any) => t[0]).join('')
-            break
-          }
-        }
-
-        axes.push({ id: bid, label, detail, done: false })
+    // 内容プロパティのキーを探す
+    let detailKey = ''
+    for (const [key, sch] of Object.entries(schema) as any[]) {
+      if (['内容', '詳細', 'description', 'detail'].includes(sch.name)) {
+        detailKey = key
+        break
       }
-      break
     }
+
+    for (const bid of resultBlockIds) {
+      const b = rmBlocks[bid]?.value
+      if (!b) continue
+      const label = (b.properties?.title ?? []).map((t: any) => t[0]).join('') || '（未設定）'
+      const detail = detailKey
+        ? (b.properties?.[detailKey] ?? []).map((t: any) => t[0]).join('')
+        : ''
+      axes.push({ id: bid, label, detail, done: false })
+    }
+    break // 最初のDBだけ使う
   }
 
   return axes
 }
 
-// 備品リスト（箇条書き）を取得
+// 手順書ページ内の備品リスト（箇条書き）を取得
 export async function getEquipmentFromPage(pageId: string): Promise<Equipment[]> {
-  const blocks = await getPageBlocks(pageId)
+  const rm = await loadPageChunk(pageId)
+  const blocks = rm.block ?? {}
+  const pageBlock = blocks[pageId]?.value
+  if (!pageBlock) return []
+
+  const contentIds: string[] = pageBlock.content ?? []
   const items: Equipment[] = []
   let inEquipSection = false
-
-  // ページのcontentの順序でブロックを処理
-  const pageBlock = blocks[pageId.replace(/-/g, '')]
-  const contentIds: string[] = pageBlock?.value?.content ?? []
 
   for (const bid of contentIds) {
     const block = blocks[bid]?.value
     if (!block) continue
-
     const text = (block.properties?.title ?? []).map((t: any) => t[0]).join('')
 
-    if ((block.type === 'header' || block.type === 'sub_header' || block.type === 'sub_sub_header') && text.includes('備品')) {
-      inEquipSection = true
+    if (['header', 'sub_header', 'sub_sub_header'].includes(block.type)) {
+      if (text.includes('備品')) {
+        inEquipSection = true
+      } else if (inEquipSection) {
+        break
+      }
       continue
     }
-    if (inEquipSection && (block.type === 'header' || block.type === 'sub_header' || block.type === 'sub_sub_header')) {
-      break
-    }
-    if (inEquipSection && (block.type === 'bulleted_list' || block.type === 'numbered_list') && text) {
+
+    if (inEquipSection && ['bulleted_list', 'numbered_list'].includes(block.type) && text) {
       items.push({ name: text, isShared: text.includes('共用') || text.includes('共有') })
     }
   }
