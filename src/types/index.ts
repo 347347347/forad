@@ -19,12 +19,13 @@ export interface Product {
 export interface DashboardData {
   title: string
   links: {
-    eval: string
-    manual: string
+    eval: string | null
+    manual: string | null
   }
   axes: VerificationAxis[]
   equipment: Equipment[]
   products: Product[]
   quantInputs: string[]
   funcInputs: string[]
+  errors: string[]
 }
