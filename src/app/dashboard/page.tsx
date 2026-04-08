@@ -126,23 +126,23 @@ export default function DashboardPage() {
         {(data?.errors?.length ?? 0) > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs mb-4">
             <div className="font-medium mb-1">一部データの取得に失敗しました</div>
-            {data.errors.map((e: string, i: number) => <div key={i}>・{e}</div>)}
+            {data?.errors?.map((e: string, i: number) => <div key={i}>・{e}</div>)}
           </div>
         )}
 
         {data && !loading && (
           <>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <h1 className="text-lg font-medium text-gray-900">{data.title}</h1>
+              <h1 className="text-lg font-medium text-gray-900">{data?.title}</h1>
               <div className="flex gap-2">
-                {data.links.eval && (
-                  <a href={data.links.eval} target="_blank" rel="noopener noreferrer"
+                {data?.links.eval && (
+                  <a href={data?.links.eval} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
                     評価・分析シート
                   </a>
                 )}
-                {data.links.manual && (
-                  <a href={data.links.manual} target="_blank" rel="noopener noreferrer"
+                {data?.links.manual && (
+                  <a href={data?.links.manual} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
                     手順書
                   </a>
@@ -190,11 +190,11 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                {data.equipment?.length > 0 && (
+                {data?.equipment?.length > 0 && (
                   <>
                     <div className="text-xs font-medium text-gray-500 mt-4 mb-2">備品リスト</div>
                     <div className="flex flex-wrap gap-1.5">
-                      {data.equipment.map((e: any, i: number) => (
+                      {data?.equipment.map((e: any, i: number) => (
                         <span key={i} className={`text-xs px-2.5 py-1 rounded-full font-medium ${e.isShared ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>
                           {e.name}
                         </span>
@@ -213,7 +213,7 @@ export default function DashboardPage() {
                   商品リスト — import商品情報
                   <span className="ml-2 normal-case text-blue-500">{month}</span>
                 </div>
-                {data.products?.length > 0 ? (
+                {data?.products?.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.products.map((p: any, i: number) => (
+                        {data?.products.map((p: any, i: number) => (
                           <tr key={i} className="border-b border-gray-50 last:border-0">
                             <td className="py-2 text-gray-500 text-xs">{p.no}</td>
                             <td className="py-2 text-gray-700 truncate pr-2">{p.maker}</td>
@@ -247,27 +247,27 @@ export default function DashboardPage() {
               {/* 検証項目 */}
               <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">検証項目 — Spreadsheet</div>
-                {data.quantInputs?.length > 0 && (
+                {data?.quantInputs?.length > 0 && (
                   <>
                     <div className="text-xs font-medium text-gray-500 mb-2">【定量】検証結果入力フォーム</div>
                     <div className="flex flex-col divide-y divide-gray-50 mb-4">
-                      {data.quantInputs.map((item: string, i: number) => (
+                      {data?.quantInputs.map((item: string, i: number) => (
                         <div key={i} className="py-1.5 text-sm text-gray-700">{item}</div>
                       ))}
                     </div>
                   </>
                 )}
-                {data.funcInputs?.length > 0 && (
+                {data?.funcInputs?.length > 0 && (
                   <>
                     <div className="text-xs font-medium text-gray-500 mb-2">【機能】検証結果入力フォーム</div>
                     <div className="flex flex-col divide-y divide-gray-50">
-                      {data.funcInputs.map((item: string, i: number) => (
+                      {data?.funcInputs.map((item: string, i: number) => (
                         <div key={i} className="py-1.5 text-sm text-gray-700">{item}</div>
                       ))}
                     </div>
                   </>
                 )}
-                {!data.quantInputs?.length && !data.funcInputs?.length && (
+                {!data?.quantInputs?.length && !data?.funcInputs?.length && (
                   <div className="text-sm text-gray-400 text-center py-8">検証項目データなし</div>
                 )}
               </div>
