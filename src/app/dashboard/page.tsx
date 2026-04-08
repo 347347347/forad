@@ -123,7 +123,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {data?.errors?.length > 0 && (
+        {(data?.errors?.length ?? 0) > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-xs mb-4">
             <div className="font-medium mb-1">一部データの取得に失敗しました</div>
             {data.errors.map((e: string, i: number) => <div key={i}>・{e}</div>)}
