@@ -12,6 +12,11 @@ function getAuth() {
 
 const MASTER_SHEET_ID = '1zbvlKGFDlpcRpQaPRq5s95gJce8RlzWqnvhIOyjU8EQ'
 
+// 【再編集】などのプレフィックスを除去して正規化
+function normalizeTitle(title: string): string {
+  return title.replace(/【[^】]*】/g, '').trim()
+}
+
 // マスターシートからタイトル名でスプレッドシートIDを取得
 export async function getSpreadsheetIdByTitle(title: string): Promise<string | null> {
   const auth = getAuth()
@@ -23,17 +28,23 @@ export async function getSpreadsheetIdByTitle(title: string): Promise<string | n
   })
 
   const rows = res.data.values ?? []
-  const matched = rows.slice(1).find((row: string[]) => row[0] === title)
+  const normalizedInput = normalizeTitle(title)
+
+  const matched = rows.slice(1).find((row: string[]) => {
+    return normalizeTitle(row[0] ?? '') === normalizedInput
+  })
+
   return matched?.[1] ?? null
 }
 
-// タイトル別シートのURLを生成（評価・分析シートへのリンク）
 export function getSheetUrl(spreadsheetId: string): string {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
 }
 
-// import商品情報タブから商品リストを取得（A列:商品番号, D列:メーカー, E列:商品名）
-export async function getProducts(spreadsheetId: string): Promise<Product[]> {
+// import商品情報タブから商品リストを取得
+// A列:商品番号, C列:更新日, D列:メーカー, E列:商品名
+// month形式: "YYYY/MM"
+export async function getProducts(spreadsheetId: string, month: string): Promise<Product[]> {
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
@@ -43,9 +54,19 @@ export async function getProducts(spreadsheetId: string): Promise<Product[]> {
   })
 
   const rows = res.data.values ?? []
+  const [filterYear, filterMonth] = month.split('/').map(Number)
+
   return rows
     .slice(1)
-    .filter((row: string[]) => row[0]?.trim())
+    .filter((row: string[]) => {
+      if (!row[0]?.trim()) return false
+      // C列の日付で絞り込み（年月のみ照合）
+      const dateStr = row[2] ?? ''
+      if (!dateStr) return true // 日付なしは通す
+      const d = new Date(dateStr)
+      if (isNaN(d.getTime())) return true
+      return d.getFullYear() === filterYear && d.getMonth() + 1 === filterMonth
+    })
     .map((row: string[]) => ({
       no: row[0] ?? '',
       maker: row[3] ?? '',
@@ -53,7 +74,7 @@ export async function getProducts(spreadsheetId: string): Promise<Product[]> {
     }))
 }
 
-// 【定量】検証結果入力フォームタブのJ列を取得
+// 【定量】検証結果入力フォームタブのJ列を取得（重複排除）
 export async function getQuantInputs(spreadsheetId: string): Promise<string[]> {
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
@@ -63,10 +84,11 @@ export async function getQuantInputs(spreadsheetId: string): Promise<string[]> {
     range: '【定量】検証結果入力フォーム!J:J',
   })
 
-  return (res.data.values ?? []).flat().filter((v: string) => v?.trim()).slice(1)
+  const values = (res.data.values ?? []).flat().filter((v: string) => v?.trim()).slice(1)
+  return [...new Set(values)] // 重複排除
 }
 
-// 【機能】検証結果入力フォームタブのJ列を取得
+// 【機能】検証結果入力フォームタブのJ列を取得（重複排除）
 export async function getFuncInputs(spreadsheetId: string): Promise<string[]> {
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
@@ -76,5 +98,6 @@ export async function getFuncInputs(spreadsheetId: string): Promise<string[]> {
     range: '【機能】検証結果入力フォーム!J:J',
   })
 
-  return (res.data.values ?? []).flat().filter((v: string) => v?.trim()).slice(1)
+  const values = (res.data.values ?? []).flat().filter((v: string) => v?.trim()).slice(1)
+  return [...new Set(values)] // 重複排除
 }
