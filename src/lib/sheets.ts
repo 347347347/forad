@@ -62,9 +62,9 @@ export async function getProducts(spreadsheetId: string, month: string): Promise
       if (!row[0]?.trim()) return false
       // C列の日付で絞り込み（年月のみ照合）
       const dateStr = row[2] ?? ''
-      if (!dateStr) return true // 日付なしは通す
+      if (!dateStr) return false // 日付なしは除外
       const d = new Date(dateStr)
-      if (isNaN(d.getTime())) return true
+      if (isNaN(d.getTime())) return false // 日付として解釈できない場合も除外
       return d.getFullYear() === filterYear && d.getMonth() + 1 === filterMonth
     })
     .map((row: string[]) => ({
