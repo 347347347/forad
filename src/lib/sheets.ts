@@ -56,7 +56,7 @@ export async function getProducts(spreadsheetId: string, month: string): Promise
     })
     .map((row: string[]) => ({
       no: row[0] ?? '',
-      isAbsent: !!(row[1]?.trim()), // B列にチェックがあれば欠番
+      isAbsent: row[1]?.toString().toUpperCase() === 'TRUE', // B列チェックボックスがTRUEなら欠番
       maker: row[3] ?? '',
       name: row[4] ?? '',
     }))

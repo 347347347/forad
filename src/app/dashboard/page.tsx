@@ -252,12 +252,15 @@ export default function DashboardPage() {
                       <tbody>
                         {data?.products?.map((p: any, i: number) => (
                           <tr key={i} className={`border-b border-gray-50 last:border-0 ${p.isAbsent ? 'opacity-40' : ''}`}>
-                            <td className="py-2 text-gray-500 text-xs">{p.no}</td>
-                            <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>
-                              {p.isAbsent ? '欠番' : p.maker}
+                            <td className="py-2 text-xs">
+                              <div className={p.isAbsent ? 'text-gray-400' : 'text-gray-500'}>{p.no}</div>
+                              {p.isAbsent && <div className="text-[10px] text-gray-400 bg-gray-100 rounded px-1 inline-block mt-0.5">欠番</div>}
                             </td>
-                            <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                              {p.isAbsent ? '—' : p.name}
+                            <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>
+                              {p.maker}
+                            </td>
+                            <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>
+                              {p.name}
                             </td>
                           </tr>
                         ))}
