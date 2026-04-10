@@ -23,36 +23,44 @@ function ProductProgressSection({ title, progressList, products }: {
   progressList: ProductProgress[]
   products: any[]
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null)
+  // 商品リストにある・欠番でない商品のみに絞り込み
+  const validNos = new Set(products.filter(p => !p.isAbsent).map(p => String(p.no)))
+  const filtered = progressList.filter(p => validNos.has(String(p.productNo)) && !p.allNA)
 
-  if (progressList.length === 0) return null
+  const [openSet, setOpenSet] = useState<Set<string>>(() => new Set(filtered.map(p => p.productNo)))
 
-  // 全商品がN/Aかチェック
-  const allNA = progressList.every(p => p.allNA)
-  if (allNA) {
+  const toggle = (no: string) => {
+    setOpenSet(prev => {
+      const next = new Set(prev)
+      next.has(no) ? next.delete(no) : next.add(no)
+      return next
+    })
+  }
+
+  if (filtered.length === 0) {
     return (
-      <div className="mb-4">
-        <div className="text-sm font-medium text-gray-700 mb-2">{title}</div>
-        <div className="text-sm text-gray-400 bg-gray-50 rounded-lg p-3">なし</div>
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h2 className="text-base font-medium text-gray-900 mb-3">{title}</h2>
+        <div className="text-sm text-gray-400 text-center py-6">なし</div>
       </div>
     )
   }
 
   return (
-    <div className="mb-5">
-      <div className="text-sm font-medium text-gray-700 mb-2">{title}</div>
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <h2 className="text-base font-medium text-gray-900 mb-3">{title}</h2>
       <div className="flex flex-col gap-1.5">
-        {progressList.filter(p => !p.allNA).map(p => {
+        {filtered.map(p => {
           const product = products.find(pr => String(pr.no) === String(p.productNo))
           const done = p.items.filter(i => i.done).length
           const total = p.items.length
           const pct = total > 0 ? Math.round(done / total * 100) : 0
-          const isOpen = expanded === p.productNo
+          const isOpen = openSet.has(p.productNo)
 
           return (
             <div key={p.productNo} className="border border-gray-200 rounded-lg overflow-hidden">
               <button
-                onClick={() => setExpanded(isOpen ? null : p.productNo)}
+                onClick={() => toggle(p.productNo)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
               >
                 <span className="text-xs text-gray-400 min-w-[28px]">#{p.productNo}</span>
@@ -64,9 +72,7 @@ function ProductProgressSection({ title, progressList, products }: {
                     <div className="h-1.5 bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
                   </div>
                   <span className="text-xs text-gray-500 min-w-[32px] text-right">{pct}%</span>
-                  <span className={`text-xs min-w-[24px] ${pct === 100 ? 'text-green-600' : 'text-gray-400'}`}>
-                    {isOpen ? '▲' : '▼'}
-                  </span>
+                  <span className="text-xs text-gray-400">{isOpen ? '▲' : '▼'}</span>
                 </div>
               </button>
               {isOpen && (
@@ -126,6 +132,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-3">
@@ -183,7 +190,7 @@ export default function DashboardPage() {
           </div>
         )}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700 text-sm">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700 text-sm mb-4">
             <div className="font-medium">{error}</div>
           </div>
         )}
@@ -196,6 +203,7 @@ export default function DashboardPage() {
 
         {data && !loading && (
           <>
+            {/* タイトルとリンク */}
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h1 className="text-lg font-medium text-gray-900">{data?.title}</h1>
               <div className="flex gap-2">
@@ -214,13 +222,13 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 検証軸：全幅 */}
+            {/* 検証軸：全幅（Notionがある場合のみ） */}
             {axes.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
                 <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">検証軸 — Notion</div>
-                <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="grid grid-cols-3 gap-2 mb-3">
                   {[
-                    { val: axes.length, label: '検証軸 合計' },
+                    { val: axes.length, label: '合計' },
                     { val: doneCount, label: '完了' },
                     { val: `${pct}%`, label: '進捗' },
                   ].map(s => (
@@ -229,9 +237,6 @@ export default function DashboardPage() {
                       <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
                     </div>
                   ))}
-                </div>
-                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                  <span>進捗</span><span>{doneCount} / {axes.length}</span>
                 </div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-4">
                   <div className="h-1.5 bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
@@ -269,65 +274,58 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* 下段：2カラム */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* 商品リスト */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <div className="flex items-baseline justify-between mb-3">
-                  <h2 className="text-base font-medium text-gray-900">商品リスト</h2>
-                  <span className="text-xs text-blue-500">{month}</span>
-                </div>
-                {(data?.products?.length ?? 0) > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '52px' }}/>
-                        <col style={{ width: '34%' }}/>
-                        <col/>
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          {['No.', 'メーカー', '商品名'].map(h => (
-                            <th key={h} className="text-left text-xs font-medium text-gray-400 pb-2 border-b border-gray-100">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data?.products?.map((p: any, i: number) => (
-                          <tr key={i} className={`border-b border-gray-50 last:border-0 ${p.isAbsent ? 'opacity-40' : ''}`}>
-                            <td className="py-2 text-xs">
-                              <div className={p.isAbsent ? 'text-gray-400' : 'text-gray-500'}>{p.no}</div>
-                              {p.isAbsent && <div className="text-[10px] text-gray-400 bg-gray-100 rounded px-1 inline-block mt-0.5">欠番</div>}
-                            </td>
-                            <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>{p.maker}</td>
-                            <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</td>
-                          </tr>
+            {/* 商品リスト：全幅・高さ35vh・スクロール */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+              <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-base font-medium text-gray-900">商品リスト</h2>
+                <span className="text-xs text-blue-500">{month}</span>
+              </div>
+              {(data?.products?.length ?? 0) > 0 ? (
+                <div className="overflow-y-auto" style={{ maxHeight: '35vh' }}>
+                  <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: '52px' }}/>
+                      <col style={{ width: '30%' }}/>
+                      <col/>
+                    </colgroup>
+                    <thead className="sticky top-0 bg-white">
+                      <tr>
+                        {['No.', 'メーカー', '商品名'].map(h => (
+                          <th key={h} className="text-left text-xs font-medium text-gray-400 pb-2 border-b border-gray-100">{h}</th>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-400 text-center py-8">{month} の商品データなし</div>
-                )}
-              </div>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data?.products?.map((p: any, i: number) => (
+                        <tr key={i} className={`border-b border-gray-50 last:border-0 ${p.isAbsent ? 'opacity-40' : ''}`}>
+                          <td className="py-2 text-xs">
+                            <div className={p.isAbsent ? 'text-gray-400' : 'text-gray-500'}>{p.no}</div>
+                            {p.isAbsent && <div className="text-[10px] text-gray-400 bg-gray-100 rounded px-1 inline-block mt-0.5">欠番</div>}
+                          </td>
+                          <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>{p.maker}</td>
+                          <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400 text-center py-8">{month} の商品データなし</div>
+              )}
+            </div>
 
-              {/* 検証項目（商品別進捗） */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h2 className="text-base font-medium text-gray-900 mb-4">検証項目</h2>
-                <ProductProgressSection
-                  title="【定量】"
-                  progressList={data?.quantProgress ?? []}
-                  products={data?.products ?? []}
-                />
-                <ProductProgressSection
-                  title="【機能】"
-                  progressList={data?.funcProgress ?? []}
-                  products={data?.products ?? []}
-                />
-                {!(data?.quantProgress?.length) && !(data?.funcProgress?.length) && (
-                  <div className="text-sm text-gray-400 text-center py-8">検証項目データなし</div>
-                )}
-              </div>
+            {/* 定量・機能：2カラム */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ProductProgressSection
+                title="【定量】"
+                progressList={data?.quantProgress ?? []}
+                products={data?.products ?? []}
+              />
+              <ProductProgressSection
+                title="【機能】"
+                progressList={data?.funcProgress ?? []}
+                products={data?.products ?? []}
+              />
             </div>
           </>
         )}
