@@ -79,39 +79,12 @@ async function getProgressByProduct(spreadsheetId: string, tabName: string): Pro
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // まずシートIDを取得してフィルター状態を完全に無視した生データを取得
-  const spreadsheet = await sheets.spreadsheets.get({
+  const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    fields: 'sheets.properties',
+    range: `'${tabName}'!A:P`,
   })
-  const sheetMeta = (spreadsheet.data.sheets ?? []).find(
-    (s: any) => s.properties?.title === tabName
-  )
-  const sheetId = sheetMeta?.properties?.sheetId
 
-  let rows: any[][] = []
-
-  if (sheetId !== undefined) {
-    // DataFilter APIでフィルター無視の全行取得
-    const filterRes = await sheets.spreadsheets.values.batchGetByDataFilter({
-      spreadsheetId,
-      requestBody: {
-        dataFilters: [{ gridRange: { sheetId, startRowIndex: 0 } }],
-        valueRenderOption: 'UNFORMATTED_VALUE',
-        majorDimension: 'ROWS',
-      },
-    })
-    rows = filterRes.data.valueRanges?.[0]?.valueRange?.values ?? []
-  } else {
-    // フォールバック: 通常取得
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${tabName}'!A:P`,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-    } as any)
-    rows = res.data.values ?? []
-  }
-
+  const rows = res.data.values ?? []
   // 5行目以降（index 4〜）
   const dataRows = rows.slice(4)
 
