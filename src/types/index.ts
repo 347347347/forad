@@ -12,8 +12,14 @@ export interface Equipment {
 
 export interface Product {
   no: string
+  isAbsent: boolean
   maker: string
   name: string
+}
+
+export interface InputItem {
+  label: string
+  done: boolean
 }
 
 export interface DashboardData {
@@ -25,7 +31,7 @@ export interface DashboardData {
   axes: VerificationAxis[]
   equipment: Equipment[]
   products: Product[]
-  quantInputs: string[]
-  funcInputs: string[]
+  quantInputs: InputItem[]
+  funcInputs: InputItem[]
   errors: string[]
 }
