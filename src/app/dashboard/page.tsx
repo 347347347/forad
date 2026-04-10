@@ -285,12 +285,13 @@ export default function DashboardPage() {
                   <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
                     <colgroup>
                       <col style={{ width: '52px' }}/>
-                      <col style={{ width: '30%' }}/>
+                      <col style={{ width: '28%' }}/>
                       <col/>
+                      <col style={{ width: '90px' }}/>
                     </colgroup>
                     <thead className="sticky top-0 bg-white">
                       <tr>
-                        {['No.', 'メーカー', '商品名'].map(h => (
+                        {['No.', 'メーカー', '商品名', 'ステータス'].map(h => (
                           <th key={h} className="text-left text-xs font-medium text-gray-400 pb-2 border-b border-gray-100">{h}</th>
                         ))}
                       </tr>
@@ -304,6 +305,18 @@ export default function DashboardPage() {
                           </td>
                           <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>{p.maker}</td>
                           <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</td>
+                          <td className="py-2">
+                            {p.kintoneStatus ? (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                                p.kintoneStatus.includes('完了') ? 'bg-green-50 text-green-700' :
+                                p.kintoneStatus.includes('進行') || p.kintoneStatus.includes('検証') ? 'bg-blue-50 text-blue-700' :
+                                p.kintoneStatus.includes('停止') || p.kintoneStatus.includes('中断') ? 'bg-red-50 text-red-700' :
+                                'bg-gray-100 text-gray-500'
+                              }`}>{p.kintoneStatus}</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

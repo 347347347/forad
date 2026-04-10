@@ -15,6 +15,7 @@ export interface Product {
   isAbsent: boolean
   maker: string
   name: string
+  kintoneStatus?: string
 }
 
 export interface InputItem {

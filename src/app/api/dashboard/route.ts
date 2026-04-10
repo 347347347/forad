@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getManualPage, getAxesFromPage, getEquipmentFromPage, getNotionUrl } from '@/lib/notion'
 import { getSpreadsheetIdByTitle, getSheetUrl, getProducts, getQuantProgress, getFuncProgress } from '@/lib/sheets'
+import { getKintoneStatuses } from '@/lib/kintone'
 
 export async function GET(req: NextRequest) {
   const title = req.nextUrl.searchParams.get('title')
@@ -24,7 +25,22 @@ export async function GET(req: NextRequest) {
         getQuantProgress(spreadsheetId).catch((e: any) => { result.errors.push(`定量進捗: ${e.message}`); return [] }),
         getFuncProgress(spreadsheetId).catch((e: any) => { result.errors.push(`機能進捗: ${e.message}`); return [] }),
       ])
-      result.products = products
+
+      // kintoneのステータスを取得して商品に付与
+      const productNos = products.filter((p: any) => !p.isAbsent).map((p: any) => String(p.no))
+      let kintoneMap = new Map<string, string>()
+      try {
+        if (process.env.KINTONE_API_TOKEN && productNos.length > 0) {
+          kintoneMap = await getKintoneStatuses(productNos)
+        }
+      } catch (e: any) {
+        result.errors.push(`kintone取得エラー: ${e.message}`)
+      }
+
+      result.products = products.map((p: any) => ({
+        ...p,
+        kintoneStatus: kintoneMap.get(String(p.no)) ?? null,
+      }))
       result.quantProgress = quantProgress
       result.funcProgress = funcProgress
     } else {
