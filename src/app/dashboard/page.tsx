@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { DashboardData, VerificationAxis, InputItem } from '@/types'
+import { DashboardData, VerificationAxis, ProductProgress } from '@/types'
 
 function getCurrentYearMonth() {
   const now = new Date()
@@ -18,28 +18,72 @@ function generateMonthOptions() {
   return options
 }
 
-function ProgressBar({ items, label }: { items: InputItem[], label: string }) {
-  const done = items.filter(i => i.done).length
-  const total = items.length
-  const pct = total > 0 ? Math.round(done / total * 100) : 0
+function ProductProgressSection({ title, progressList, products }: {
+  title: string
+  progressList: ProductProgress[]
+  products: any[]
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  if (progressList.length === 0) return null
+
+  // 全商品がN/Aかチェック
+  const allNA = progressList.every(p => p.allNA)
+  if (allNA) {
+    return (
+      <div className="mb-4">
+        <div className="text-sm font-medium text-gray-700 mb-2">{title}</div>
+        <div className="text-sm text-gray-400 bg-gray-50 rounded-lg p-3">なし</div>
+      </div>
+    )
+  }
+
   return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-gray-700">{label}</span>
-        <span className="text-xs text-gray-500">{done} / {total}　{pct}%</span>
-      </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-        <div className="h-1.5 bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="flex flex-col divide-y divide-gray-50">
-        {items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between py-1.5">
-            <span className={`text-sm ${item.done ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{item.label}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-2 shrink-0 ${item.done ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-              {item.done ? '入力済' : '未入力'}
-            </span>
-          </div>
-        ))}
+    <div className="mb-5">
+      <div className="text-sm font-medium text-gray-700 mb-2">{title}</div>
+      <div className="flex flex-col gap-1.5">
+        {progressList.filter(p => !p.allNA).map(p => {
+          const product = products.find(pr => String(pr.no) === String(p.productNo))
+          const done = p.items.filter(i => i.done).length
+          const total = p.items.length
+          const pct = total > 0 ? Math.round(done / total * 100) : 0
+          const isOpen = expanded === p.productNo
+
+          return (
+            <div key={p.productNo} className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setExpanded(isOpen ? null : p.productNo)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+              >
+                <span className="text-xs text-gray-400 min-w-[28px]">#{p.productNo}</span>
+                <span className="text-sm text-gray-700 flex-1 truncate">
+                  {product ? `${product.maker} ${product.name}` : '—'}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500 min-w-[32px] text-right">{pct}%</span>
+                  <span className={`text-xs min-w-[24px] ${pct === 100 ? 'text-green-600' : 'text-gray-400'}`}>
+                    {isOpen ? '▲' : '▼'}
+                  </span>
+                </div>
+              </button>
+              {isOpen && (
+                <div className="border-t border-gray-100 px-3 py-2 bg-gray-50">
+                  {p.items.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0">
+                      <span className={`text-xs ${item.done ? 'text-gray-400 line-through' : 'text-gray-600'}`}>{item.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ml-2 shrink-0 ${item.done ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {item.done ? '入力済' : '未入力'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -58,7 +102,6 @@ export default function DashboardPage() {
     setLoading(true)
     setError(null)
     setData(null)
-
     try {
       const params = new URLSearchParams({ title: query.trim(), month })
       const res = await fetch(`/api/dashboard?${params}`)
@@ -256,12 +299,8 @@ export default function DashboardPage() {
                               <div className={p.isAbsent ? 'text-gray-400' : 'text-gray-500'}>{p.no}</div>
                               {p.isAbsent && <div className="text-[10px] text-gray-400 bg-gray-100 rounded px-1 inline-block mt-0.5">欠番</div>}
                             </td>
-                            <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>
-                              {p.maker}
-                            </td>
-                            <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>
-                              {p.name}
-                            </td>
+                            <td className={`py-2 truncate pr-2 ${p.isAbsent ? 'text-gray-400' : 'text-gray-700'}`}>{p.maker}</td>
+                            <td className={`py-2 truncate ${p.isAbsent ? 'text-gray-400' : 'text-gray-900'}`}>{p.name}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -272,16 +311,20 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* 検証項目 */}
+              {/* 検証項目（商品別進捗） */}
               <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <h2 className="text-base font-medium text-gray-900 mb-4">検証項目</h2>
-                {(data?.quantInputs?.length ?? 0) > 0 && (
-                  <ProgressBar items={data?.quantInputs ?? []} label="【定量】" />
-                )}
-                {(data?.funcInputs?.length ?? 0) > 0 && (
-                  <ProgressBar items={data?.funcInputs ?? []} label="【機能】" />
-                )}
-                {!(data?.quantInputs?.length) && !(data?.funcInputs?.length) && (
+                <ProductProgressSection
+                  title="【定量】"
+                  progressList={data?.quantProgress ?? []}
+                  products={data?.products ?? []}
+                />
+                <ProductProgressSection
+                  title="【機能】"
+                  progressList={data?.funcProgress ?? []}
+                  products={data?.products ?? []}
+                />
+                {!(data?.quantProgress?.length) && !(data?.funcProgress?.length) && (
                   <div className="text-sm text-gray-400 text-center py-8">検証項目データなし</div>
                 )}
               </div>

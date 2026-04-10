@@ -56,7 +56,7 @@ export async function getProducts(spreadsheetId: string, month: string): Promise
     })
     .map((row: string[]) => ({
       no: row[0] ?? '',
-      isAbsent: row[1]?.toString().toUpperCase() === 'TRUE', // B列チェックボックスがTRUEなら欠番
+      isAbsent: row[1]?.toString().toUpperCase() === 'TRUE',
       maker: row[3] ?? '',
       name: row[4] ?? '',
     }))
@@ -64,41 +64,68 @@ export async function getProducts(spreadsheetId: string, month: string): Promise
 
 export interface InputItem {
   label: string
-  done: boolean // P列: 1=入力済み, 0=未入力
+  done: boolean
 }
 
-// J列(ラベル)とP列(進捗)を取得、4行目の「自動」除外、重複排除
-async function getInputItemsFromTab(spreadsheetId: string, tabName: string): Promise<InputItem[]> {
+export interface ProductProgress {
+  productNo: string
+  items: InputItem[]
+  allNA: boolean // 全項目が#N/Aの場合
+}
+
+// D列=商品番号, J列=検証項目ラベル, P列=評価完了回数
+// 5行目以降、「自動」と「#N/A」除外、商品番号ごとにグループ化
+async function getProgressByProduct(spreadsheetId: string, tabName: string): Promise<ProductProgress[]> {
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${tabName}'!J:P`,
+    range: `'${tabName}'!A:P`,
   })
 
   const rows = res.data.values ?? []
-  const seen = new Set<string>()
-  const items: InputItem[] = []
+  // 5行目以降（index 4〜）
+  const dataRows = rows.slice(4)
 
-  rows.slice(1).forEach((row: string[], i: number) => {
-    const label = row[0]?.trim() // J列
-    const pVal = row[6]?.trim()  // P列（J〜P = 7列、index 6）
+  // 商品番号ごとにグループ化
+  const map = new Map<string, InputItem[]>()
 
-    if (!label) return
-    if (label === '自動') return
-    if (seen.has(label)) return
-    seen.add(label)
+  for (const row of dataRows) {
+    const productNo = row[3]?.toString().trim() // D列
+    const label = row[9]?.toString().trim()     // J列
+    const pVal = row[15]?.toString().trim()     // P列
+
+    if (!productNo || !label) continue
+    if (label === '自動') continue
+
+    if (!map.has(productNo)) map.set(productNo, [])
+    const items = map.get(productNo)!
+
+    // 同一商品内での重複ラベルはスキップ
+    if (items.find(i => i.label === label)) continue
 
     items.push({ label, done: pVal === '1' })
-  })
+  }
 
-  return items
+  const result: ProductProgress[] = []
+  for (const [productNo, items] of map.entries()) {
+    // 全項目が#N/Aかチェック
+    const nonNA = items.filter(i => i.label !== '#N/A')
+    const allNA = nonNA.length === 0
+    result.push({
+      productNo,
+      items: nonNA, // #N/Aは表示しない
+      allNA,
+    })
+  }
+
+  return result
 }
 
-export async function getQuantInputs(spreadsheetId: string): Promise<InputItem[]> {
-  return getInputItemsFromTab(spreadsheetId, '【定量】検証結果入力フォーム')
+export async function getQuantProgress(spreadsheetId: string): Promise<ProductProgress[]> {
+  return getProgressByProduct(spreadsheetId, '【定量】検証結果入力フォーム')
 }
 
-export async function getFuncInputs(spreadsheetId: string): Promise<InputItem[]> {
-  return getInputItemsFromTab(spreadsheetId, '【機能】検証結果入力フォーム')
+export async function getFuncProgress(spreadsheetId: string): Promise<ProductProgress[]> {
+  return getProgressByProduct(spreadsheetId, '【機能】検証結果入力フォーム')
 }

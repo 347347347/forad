@@ -22,6 +22,12 @@ export interface InputItem {
   done: boolean
 }
 
+export interface ProductProgress {
+  productNo: string
+  items: InputItem[]
+  allNA: boolean
+}
+
 export interface DashboardData {
   title: string
   links: {
@@ -31,7 +37,7 @@ export interface DashboardData {
   axes: VerificationAxis[]
   equipment: Equipment[]
   products: Product[]
-  quantInputs: InputItem[]
-  funcInputs: InputItem[]
+  quantProgress: ProductProgress[]
+  funcProgress: ProductProgress[]
   errors: string[]
 }
